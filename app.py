@@ -19,7 +19,6 @@ from config import settings
 # ── Page config — must be first Streamlit call ─────────────────
 st.set_page_config(
     page_title=settings.APP_TITLE,
-    page_icon="🔍",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -245,7 +244,7 @@ def load_detector():
 # ── Header ──────────────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
-    <h1>🔍 AI Image Detector</h1>
+    <h1>AI Image Detector</h1>
     <p>CLIP-based detection · Real vs AI-Generated · Forensic Analysis</p>
 </div>
 """, unsafe_allow_html=True)
@@ -255,7 +254,7 @@ st.markdown("""
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## ⚙️ Settings")
+    st.markdown("## Settings")
 
     settings.DETECTION_THRESHOLD = 0.9
 
@@ -275,7 +274,7 @@ with st.sidebar:
     )
 
     st.markdown("---")
-    st.markdown("## 📊 Session Stats")
+    st.markdown("## Session Stats")
 
     total = len(st.session_state.history)
     ai_count = sum(1 for h in st.session_state.history if h.get("is_ai"))
@@ -285,20 +284,20 @@ with st.sidebar:
     with col1:
         st.metric("Total", total)
     with col2:
-        st.metric("🤖 AI", ai_count)
+        st.metric("AI", ai_count)
     with col3:
-        st.metric("📷 Real", real_count)
+        st.metric("Real", real_count)
 
     if st.session_state.history:
         st.markdown("**Recent:**")
         for h in reversed(st.session_state.history[-5:]):
-            label = "🤖 AI" if h["is_ai"] else "📷 Real"
+            label = "AI" if h["is_ai"] else "Real"
             conf = h["confidence"]
             st.caption(f"{label} · {conf:.0%} conf · {h['name'][:20]}")
 
     st.markdown("---")
 
-    if st.button("🗑️ Clear History"):
+    if st.button("Clear History"):
         st.session_state.history = []
         st.session_state.result = None
         st.rerun()
@@ -312,7 +311,7 @@ col_upload, col_results = st.columns([1, 1], gap="large")
 
 # ── LEFT: Upload ────────────────────────────────────────────────
 with col_upload:
-    st.markdown("### 📤 Upload Image")
+    st.markdown("### Upload Image")
 
     uploaded = st.file_uploader(
         "Upload an image to analyze",
@@ -330,12 +329,12 @@ with col_upload:
 
         st.markdown("---")
 
-        analyze_btn = st.button("🔍 Analyze Image", type="primary", use_container_width=True)
+        analyze_btn = st.button("Analyze Image", type="primary", use_container_width=True)
 
         if analyze_btn:
             start_time = time.time()
 
-            with st.spinner("🧠 Running CLIP analysis..."):
+            with st.spinner("Running CLIP analysis..."):
                 try:
                     det = load_detector()
                     result = det.predict(image)
@@ -343,7 +342,7 @@ with col_upload:
 
                     if run_forensics:
                         from utils.image_utils import get_image_stats, compute_ela_score, get_frequency_analysis
-                        with st.spinner("🔬 Running forensic analysis..."):
+                        with st.spinner("Running forensic analysis..."):
                             st.session_state.image_stats = get_image_stats(image)
                             ela_score, ela_img = compute_ela_score(image)
                             st.session_state.ela_score = ela_score
@@ -368,7 +367,7 @@ with col_upload:
                         st.code(traceback.format_exc())
 
     else:
-        st.info("👆 Upload a JPG, PNG, or WEBP image to begin analysis.")
+        st.info("Upload a JPG, PNG, or WEBP image to begin analysis.")
 
         st.markdown("**What this tool detects:**")
         items = [
@@ -385,7 +384,7 @@ with col_upload:
 
 # ── RIGHT: Results ───────────────────────────────────────────────
 with col_results:
-    st.markdown("### 📊 Analysis Results")
+    st.markdown("### Analysis Results")
 
     result = st.session_state.result
 
@@ -393,7 +392,7 @@ with col_results:
         st.markdown("""
         <div style="background:rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);
         border-radius:12px; padding:3rem; text-align:center; color:rgba(255,255,255,0.3);">
-            <div style="font-size:3rem;">🔍</div>
+            <div style="font-size:2rem; font-weight: bold;">Analysis Results</div>
             <div style="margin-top:1rem;">Upload an image and click Analyze to see results</div>
         </div>
         """, unsafe_allow_html=True)
@@ -409,17 +408,17 @@ with col_results:
 
         if is_uncertain:
             verdict_class = "result-uncertain"
-            verdict_icon = "⚠️"
+            verdict_icon = "?"
             verdict_text = "UNCERTAIN"
             verdict_color = "#f6e05e"
         elif is_ai:
             verdict_class = "result-ai"
-            verdict_icon = "🤖"
+            verdict_icon = "AI"
             verdict_text = "AI GENERATED"
             verdict_color = "#fc8181"
         else:
             verdict_class = "result-real"
-            verdict_icon = "📷"
+            verdict_icon = "REAL"
             verdict_text = "REAL PHOTO"
             verdict_color = "#68d391"
 
@@ -458,7 +457,7 @@ with col_results:
         st.markdown(f"""
         <div style="margin: 0.5rem 0;">
             <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:rgba(255,255,255,0.4); margin-bottom:4px;">
-                <span>🤖 AI</span><span>{ai_pct}%</span>
+                <span>AI</span><span>{ai_pct}%</span>
             </div>
             <div class="progress-bar-container">
                 <div style="width:{ai_pct}%; height:100%; background:linear-gradient(90deg,#fc8181,#e53e3e); border-radius:6px;"></div>
@@ -466,7 +465,7 @@ with col_results:
         </div>
         <div style="margin: 0.5rem 0;">
             <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:rgba(255,255,255,0.4); margin-bottom:4px;">
-                <span>📷 Real</span><span>{real_pct}%</span>
+                <span>Real</span><span>{real_pct}%</span>
             </div>
             <div class="progress-bar-container">
                 <div style="width:{real_pct}%; height:100%; background:linear-gradient(90deg,#68d391,#38a169); border-radius:6px;"></div>
@@ -476,7 +475,7 @@ with col_results:
 
         # ── TABS ──────────────────────────────────────────────
         tab1, tab2, tab3, tab4 = st.tabs([
-            "🔬 Artifacts", "📡 Forensics", "🧩 CLIP Details", "📄 Raw Data"
+            "Artifacts", "Forensics", "CLIP Details", "Raw Data"
         ])
 
         # TAB 1: Artifact Analysis
@@ -504,10 +503,10 @@ with col_results:
 
                 if suspicious:
                     suspicious_count += 1
-                    badge = '<span class="badge-ai">⚠ Suspicious</span>'
+                    badge = '<span class="badge-ai">Suspicious</span>'
                     bar_color = "#fc8181"
                 else:
-                    badge = '<span class="badge-real">✓ Normal</span>'
+                    badge = '<span class="badge-real">Normal</span>'
                     bar_color = "#68d391"
 
                 st.markdown(f"""
@@ -604,7 +603,7 @@ with col_results:
             col_r, col_ai = st.columns(2)
 
             with col_r:
-                st.markdown("**📷 Real Image Prompts**")
+                st.markdown("**Real Image Prompts**")
                 from utils.detector import REAL_IMAGE_PROMPTS
                 real_scores = result.get("real_scores", [])
                 if real_scores:
@@ -622,7 +621,7 @@ with col_results:
                         """, unsafe_allow_html=True)
 
             with col_ai:
-                st.markdown("**🤖 AI Image Prompts**")
+                st.markdown("**AI Image Prompts**")
                 from utils.detector import AI_GENERATED_PROMPTS
                 ai_scores = result.get("ai_scores", [])
                 if ai_scores:
@@ -639,8 +638,8 @@ with col_results:
                         """, unsafe_allow_html=True)
 
             st.markdown("#### Top Matching Prompts")
-            st.success(f"📷 Best real match: *{result.get('top_real_prompt', '')}*")
-            st.error(f"🤖 Best AI match: *{result.get('top_ai_prompt', '')}*")
+            st.success(f"Best real match: *{result.get('top_real_prompt', '')}*")
+            st.error(f"Best AI match: *{result.get('top_ai_prompt', '')}*")
 
             if result.get("ensemble"):
                 st.markdown("#### Ensemble Model Results")
@@ -666,7 +665,7 @@ with col_results:
             # Download button
             result_json = json.dumps(result, indent=2)
             st.download_button(
-                label="⬇️ Download Full Report (JSON)",
+                label="Download Full Report (JSON)",
                 data=result_json,
                 file_name=f"detection_report.json",
                 mime="application/json",

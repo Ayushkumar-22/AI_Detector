@@ -325,7 +325,7 @@ with col_upload:
 
         from utils.image_utils import resize_for_display
         display_img = resize_for_display(image, max_size=600)
-        st.image(display_img, use_column_width=True, caption=uploaded.name)
+        st.image(display_img, width="stretch", caption=uploaded.name)
 
         st.markdown("---")
 
@@ -573,7 +573,7 @@ with col_results:
                         st.image(
                             st.session_state.ela_image,
                             caption="ELA Visualization (bright areas = high error = compression artifacts)",
-                            use_column_width=True,
+                            width="stretch",
                         )
 
                 if st.session_state.freq_analysis:

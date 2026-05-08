@@ -16,13 +16,13 @@ class Settings:
     # Models
     CLIP_MODEL: str = os.getenv("CLIP_MODEL", "openai/clip-vit-large-patch14")
     CLIP_MODEL_2: str = os.getenv("CLIP_MODEL_2", "openai/clip-vit-base-patch32")
-    USE_ENSEMBLE: bool = os.getenv("USE_ENSEMBLE", "true").lower() == "true"
+    USE_ENSEMBLE: bool = os.getenv("USE_ENSEMBLE", "false").lower() == "true"
 
     # Detection
-    DETECTION_THRESHOLD: float = float(os.getenv("DETECTION_THRESHOLD", "0.9"))
-    MIN_CONFIDENCE: float = float(os.getenv("MIN_CONFIDENCE", "0.16"))
-    MIN_AI_MARGIN: float = float(os.getenv("MIN_AI_MARGIN", "0.08"))
-    USE_ROBUST_AUGMENTATION: bool = os.getenv("USE_ROBUST_AUGMENTATION", "true").lower() == "true"
+    DETECTION_THRESHOLD: float = float(os.getenv("DETECTION_THRESHOLD", "0.5"))
+    MIN_CONFIDENCE: float = float(os.getenv("MIN_CONFIDENCE", "0.2"))
+    MIN_AI_MARGIN: float = float(os.getenv("MIN_AI_MARGIN", "0.1"))
+    USE_ROBUST_AUGMENTATION: bool = os.getenv("USE_ROBUST_AUGMENTATION", "false").lower() == "true"
 
     # App
     APP_TITLE: str = os.getenv("APP_TITLE", "AI Image Detector")

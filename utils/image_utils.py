@@ -35,15 +35,26 @@ def random_motion_blur(image: Image.Image, kernel_size_range: Tuple[int, int] = 
     """Apply a simple motion blur kernel to simulate camera shake."""
     if np.random.rand() > probability:
         return image
-    kernel_size = int(np.random.choice(range(kernel_size_range[0], kernel_size_range[1], 2)))
-    if kernel_size < 3:
+
+    width, height = image.size
+    max_kernel = min(max(kernel_size_range), width, height)
+    if max_kernel < 3:
         return image
-    direction = np.random.choice(["horizontal", "vertical"])
-    if direction == "horizontal":
-        kernel = [1.0 / kernel_size] * kernel_size
-        return image.filter(ImageFilter.Kernel((kernel_size, 1), kernel, scale=1))
+
+    possible_sizes = [s for s in range(kernel_size_range[0], kernel_size_range[1] + 1, 2) if s <= max_kernel]
+    if not possible_sizes:
+        return image
+
+    kernel_size = int(np.random.choice(possible_sizes))
     kernel = [1.0 / kernel_size] * kernel_size
-    return image.filter(ImageFilter.Kernel((1, kernel_size), kernel, scale=1))
+    direction = np.random.choice(["horizontal", "vertical"])
+
+    try:
+        if direction == "horizontal":
+            return image.filter(ImageFilter.Kernel((kernel_size, 1), kernel, scale=1))
+        return image.filter(ImageFilter.Kernel((1, kernel_size), kernel, scale=1))
+    except ValueError:
+        return image
 
 
 def random_noise(image: Image.Image, std_range: Tuple[float, float] = (0.02, 0.10), probability: float = 0.7) -> Image.Image:
@@ -98,6 +109,14 @@ def preprocess_for_model(image: Image.Image, target_size: int = 224) -> Image.Im
     if image.mode != "RGB":
         image = image.convert("RGB")
     return ImageOps.fit(image, (target_size, target_size), Image.LANCZOS)
+
+
+def random_jpeg_compression(image: Image.Image, quality_range: Tuple[int, int] = (60, 90), probability: float = 0.8) -> Image.Image:
+    """Randomly re-encode the image as JPEG to simulate compression artifacts."""
+    if np.random.rand() > probability:
+        return image
+    quality = int(np.random.randint(*quality_range))
+    return jpeg_compress(image, quality=quality)
 
 
 def create_robust_variants(image: Image.Image, max_variants: int = 6) -> List[Image.Image]:

@@ -1,7 +1,9 @@
 import argparse
+import io
 import os
 import random
 import time
+from PIL import Image, ImageFilter
 from pathlib import Path
 
 import numpy as np
@@ -22,6 +24,53 @@ def set_seed(seed: int = 42):
     torch.cuda.manual_seed_all(seed)
 
 
+class JpegCompression:
+    def __init__(self, quality_lower=50, quality_upper=90, p=0.5):
+        self.quality_lower = quality_lower
+        self.quality_upper = quality_upper
+        self.p = p
+
+    def __call__(self, img):
+        if random.random() < self.p:
+            quality = random.randint(self.quality_lower, self.quality_upper)
+            buffer = io.BytesIO()
+            img.save(buffer, "JPEG", quality=quality)
+            buffer.seek(0)
+            return Image.open(buffer)
+        return img
+
+class GaussianNoise:
+    def __init__(self, mean=0.0, std_limit=0.05, p=0.5):
+        self.mean = mean
+        self.std_limit = std_limit
+        self.p = p
+
+    def __call__(self, tensor):
+        if random.random() < self.p:
+            std = random.uniform(0.01, self.std_limit)
+            noise = torch.randn(tensor.size()) * std + self.mean
+            return torch.clamp(tensor + noise, 0.0, 1.0)
+        return tensor
+
+class MotionBlur:
+    def __init__(self, kernel_size_range=(3, 7), p=0.5):
+        self.kernel_size_range = kernel_size_range
+        self.p = p
+
+    def __call__(self, img):
+        if random.random() < self.p:
+            kernel_size = random.choice(range(self.kernel_size_range[0], self.kernel_size_range[1] + 1, 2))
+            kernel = [1.0 / kernel_size] * kernel_size
+            direction = random.choice(["horizontal", "vertical"])
+            try:
+                if direction == "horizontal":
+                    img = img.filter(ImageFilter.Kernel((kernel_size, 1), kernel, scale=1))
+                else:
+                    img = img.filter(ImageFilter.Kernel((1, kernel_size), kernel, scale=1))
+            except ValueError:
+                pass
+        return img
+
 def get_data_transforms(image_size: int = 224):
     train_transforms = transforms.Compose([
         transforms.RandomResizedCrop(image_size, scale=(0.7, 1.0), ratio=(0.8, 1.25)),
@@ -29,6 +78,8 @@ def get_data_transforms(image_size: int = 224):
         transforms.RandomApply([
             transforms.ColorJitter(brightness=0.30, contrast=0.30, saturation=0.25, hue=0.05)
         ], p=0.85),
+        JpegCompression(quality_lower=50, quality_upper=90, p=0.5),
+        MotionBlur(kernel_size_range=(3, 7), p=0.4),
         transforms.RandomApply([
             transforms.GaussianBlur(kernel_size=(3, 7), sigma=(0.1, 2.0))
         ], p=0.6),
@@ -37,6 +88,7 @@ def get_data_transforms(image_size: int = 224):
         ], p=0.4),
         transforms.RandomGrayscale(p=0.05),
         transforms.ToTensor(),
+        GaussianNoise(std_limit=0.05, p=0.4),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
@@ -55,9 +107,14 @@ def build_model(num_classes: int = 2, backbone: str = "resnet50", dropout_prob: 
         try:
             model = models.efficientnet_b0(pretrained=True)
             in_features = model.classifier[1].in_features
+            # Robust classification head
             model.classifier = nn.Sequential(
                 nn.Dropout(dropout_prob),
-                nn.Linear(in_features, num_classes),
+                nn.Linear(in_features, 512),
+                nn.BatchNorm1d(512),
+                nn.GELU(),
+                nn.Dropout(dropout_prob / 2),
+                nn.Linear(512, num_classes),
             )
             return model
         except AttributeError:
@@ -66,8 +123,13 @@ def build_model(num_classes: int = 2, backbone: str = "resnet50", dropout_prob: 
     model = models.resnet50(pretrained=True)
     in_features = model.fc.in_features
     model.fc = nn.Sequential(
+        nn.BatchNorm1d(in_features),
         nn.Dropout(dropout_prob),
-        nn.Linear(in_features, num_classes),
+        nn.Linear(in_features, 512),
+        nn.BatchNorm1d(512),
+        nn.GELU(),
+        nn.Dropout(dropout_prob / 2),
+        nn.Linear(512, num_classes),
     )
     return model
 
@@ -123,6 +185,15 @@ def evaluate_model(model, dataloader, device):
     auc = roc_auc_score(all_labels, all_probs)
     conf_mat = confusion_matrix(all_labels, all_preds)
 
+    # Confidence Threshold Tuning
+    best_f1, best_thresh = 0.0, 0.5
+    for thresh in np.arange(0.1, 0.9, 0.05):
+        thresh_preds = (np.array(all_probs) >= thresh).astype(int)
+        temp_f1 = f1_score(all_labels, thresh_preds, zero_division=0)
+        if temp_f1 > best_f1:
+            best_f1 = temp_f1
+            best_thresh = thresh
+
     return {
         "accuracy": accuracy,
         "precision": precision,
@@ -130,13 +201,15 @@ def evaluate_model(model, dataloader, device):
         "f1_score": f1,
         "roc_auc": auc,
         "confusion_matrix": conf_mat.tolist(),
+        "optimal_threshold": float(best_thresh),
+        "optimal_f1": float(best_f1),
         "predictions": all_preds,
         "probabilities": all_probs,
         "labels": all_labels,
     }
 
 
-def train_one_epoch(model, criterion, optimizer, dataloader, device, mixup_alpha: float = 0.3):
+def train_one_epoch(model, criterion, optimizer, dataloader, device, mixup_alpha: float = 0.3, scheduler=None):
     model.train()
     running_loss = 0.0
 
@@ -155,6 +228,8 @@ def train_one_epoch(model, criterion, optimizer, dataloader, device, mixup_alpha
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+        if scheduler is not None:
+            scheduler.step()
 
         running_loss += loss.item() * inputs.size(0)
 
@@ -162,9 +237,30 @@ def train_one_epoch(model, criterion, optimizer, dataloader, device, mixup_alpha
 
 
 def train(model, train_loader, val_loader, device, epochs: int, lr: float, weight_decay: float, patience: int, output_dir: Path):
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = CosineAnnealingLR(optimizer, T_max=epochs)
+    # Label smoothing acts as probability calibration and reduces overconfidence
+    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    
+    # Differential learning rates: preserve backbone features, adapt head quickly
+    head_params = []
+    backbone_params = []
+    for name, param in model.named_parameters():
+        if 'fc' in name or 'classifier' in name:
+            head_params.append(param)
+        else:
+            backbone_params.append(param)
+            
+    optimizer = optim.AdamW([
+        {'params': backbone_params, 'lr': lr * 0.1},
+        {'params': head_params, 'lr': lr}
+    ], weight_decay=weight_decay)
+    
+    # OneCycleLR handles warmup and annealing per batch, leading to much better generalization
+    scheduler = optim.lr_scheduler.OneCycleLR(
+        optimizer, 
+        max_lr=[lr * 0.1, lr], 
+        epochs=epochs, 
+        steps_per_epoch=len(train_loader)
+    )
 
     best_auc = 0.0
     best_state = None
@@ -173,9 +269,8 @@ def train(model, train_loader, val_loader, device, epochs: int, lr: float, weigh
 
     for epoch in range(1, epochs + 1):
         start_time = time.time()
-        train_loss = train_one_epoch(model, criterion, optimizer, train_loader, device)
+        train_loss = train_one_epoch(model, criterion, optimizer, train_loader, device, scheduler=scheduler)
         val_metrics = evaluate_model(model, val_loader, device)
-        scheduler.step()
 
         elapsed = time.time() - start_time
         history.append({
@@ -189,7 +284,7 @@ def train(model, train_loader, val_loader, device, epochs: int, lr: float, weigh
             "elapsed": elapsed,
         })
 
-        print(f"Epoch {epoch}/{epochs} | train_loss={train_loss:.4f} | val_auc={val_metrics['roc_auc']:.4f} | val_f1={val_metrics['f1_score']:.4f} | time={elapsed:.1f}s")
+        print(f"Epoch {epoch}/{epochs} | train_loss={train_loss:.4f} | val_auc={val_metrics['roc_auc']:.4f} | val_f1={val_metrics['f1_score']:.4f} (Opt Thresh: {val_metrics['optimal_threshold']:.2f}) | time={elapsed:.1f}s")
 
         if val_metrics["roc_auc"] > best_auc:
             best_auc = val_metrics["roc_auc"]

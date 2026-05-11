@@ -16,7 +16,7 @@ from config import settings
 # CLIP works by comparing image embeddings to text embeddings.
 # We define prompts for both "real" and "AI-generated" categories
 # and measure which set the image is closer to.
-# ─────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────    1715 100 870 945 
 
 REAL_IMAGE_PROMPTS = [
     "a real photograph taken by a camera",
